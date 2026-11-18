@@ -179,3 +179,19 @@ describe('sanitizeBox', () => {
 		expect(sanitizeBox(raw)).toBeNull();
 	});
 });
+
+import { seenVars } from './diagnostics';
+
+describe('seenVars', () => {
+	it('показывает только имена наших переменных и только непустые', () => {
+		const out = seenVars({ ANTHROPIC_API_KEY: 'sk-secret', SERPER_KEY: 'x', ACCESS_CODE: '', PATH: '/bin', HOME: '/root' });
+		expect(out).toContain('ANTHROPIC_API_KEY');
+		expect(out).toContain('SERPER_KEY'); // опечатка в имени сразу видна
+		expect(out).not.toContain('sk-secret');
+		expect(out).not.toContain('ACCESS_CODE');
+		expect(out).not.toContain('PATH');
+	});
+	it('подсказывает, если не видно ничего', () => {
+		expect(seenVars({ PATH: '/bin' })).toContain('не видит ни одной');
+	});
+});

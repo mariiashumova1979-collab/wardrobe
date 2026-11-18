@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { ANTHROPIC_API_KEY, CLAUDE_MODEL } from '$app/env/private';
+import { seenVars } from './diagnostics';
 
 const DEFAULT_MODEL = 'claude-haiku-5-5';
 const IMAGE_RE = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/;
@@ -43,7 +44,7 @@ export async function askTool(opts: {
 	timeoutMs?: number;
 }): Promise<Record<string, unknown>> {
 	const key = ANTHROPIC_API_KEY;
-	if (!key) error(500, 'ANTHROPIC_API_KEY не задан');
+	if (!key) error(500, `ANTHROPIC_API_KEY не найден на сервере. ${seenVars()}`);
 
 	const content: unknown[] = [];
 	const images = opts.images ?? [];

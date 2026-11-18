@@ -2,6 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import { ANTHROPIC_API_KEY, SERPER_API_KEY } from '$app/env/private';
 import { buildSearchQuery } from '../../../lib/query';
 import { mapSerperImages, type Candidate } from '../../../lib/server/images';
+import { seenVars } from '../../../lib/server/diagnostics';
 import { rankByVision } from '../../../lib/server/rank';
 import type { RequestHandler } from './$types';
 
@@ -11,7 +12,7 @@ export const GET: RequestHandler = async ({ url }) => {
 	// Как человек описал вещь: по этому тексту Claude проверяет цвет и модель найденных фото
 	const about = (url.searchParams.get('about') ?? q).trim().slice(0, 200);
 	const key = SERPER_API_KEY;
-	if (!key) error(500, 'SERPER_API_KEY не задан');
+	if (!key) error(500, `SERPER_API_KEY не найден на сервере. ${seenVars()}`);
 
 	let res: Response;
 	try {
