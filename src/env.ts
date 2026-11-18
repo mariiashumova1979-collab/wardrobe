@@ -7,8 +7,8 @@ const optional = (value: string | undefined) => value?.trim() || undefined;
 export const variables = defineEnvVars({
 	/** Код доступа к /api/*: без него приложение закрыто. */
 	ACCESS_CODE: { schema: optional },
-	/** Ключ Brave Search API (поиск картинок). */
-	BRAVE_API_KEY: { schema: optional },
+	/** Ключ Serper (serper.dev): поиск по Google Images. */
+	SERPER_API_KEY: { schema: optional },
 	/** Ключ Anthropic API (определение вещи и разметка). */
 	ANTHROPIC_API_KEY: { schema: optional },
 	/** Необязательно: другая модель Claude вместо модели по умолчанию. */

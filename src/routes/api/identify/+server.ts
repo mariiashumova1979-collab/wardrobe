@@ -36,7 +36,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	const out = await askTool({
 		system: SYSTEM,
 		tool: TOOL,
-		imageDataUrl: image,
+		images: [image],
 		maxTokens: 300,
 		text:
 			'На изображении вещь (одежда, обувь, аксессуар): её фото, скриншот из магазина или бирка с этикеткой. ' +

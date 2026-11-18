@@ -30,6 +30,29 @@ export async function shrink(blob: Blob, max: number, opts: ShrinkOptions = {}):
 	);
 }
 
+/** Обрезает картинку по рамке (доли 0–1) с небольшим запасом по краям. */
+export async function crop(
+	blob: Blob,
+	box: { x1: number; y1: number; x2: number; y2: number },
+	pad = 0.05
+): Promise<Blob> {
+	const bmp = await createImageBitmap(blob);
+	const x1 = Math.max(0, box.x1 - pad) * bmp.width;
+	const y1 = Math.max(0, box.y1 - pad) * bmp.height;
+	const x2 = Math.min(1, box.x2 + pad) * bmp.width;
+	const y2 = Math.min(1, box.y2 + pad) * bmp.height;
+	const w = Math.max(1, Math.round(x2 - x1));
+	const h = Math.max(1, Math.round(y2 - y1));
+	const canvas = document.createElement('canvas');
+	canvas.width = w;
+	canvas.height = h;
+	canvas.getContext('2d')!.drawImage(bmp, x1, y1, w, h, 0, 0, w, h);
+	bmp.close();
+	return new Promise((resolve, reject) =>
+		canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Не удалось обрезать'))), 'image/jpeg', 0.9)
+	);
+}
+
 export function blobToDataURL(blob: Blob): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const r = new FileReader();

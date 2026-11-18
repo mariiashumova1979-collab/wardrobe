@@ -94,3 +94,88 @@ describe('layerOf', () => {
 		expect(layerOf('shirt')).toBe('base');
 	});
 });
+
+import { mapSerperImages, parseRatings, rankCandidates, sanitizeBox, type Candidate } from './images';
+
+const cand = (n: number): Candidate[] =>
+	Array.from({ length: n }, (_, i) => ({ id: String(i), title: '', source: '', thumb: `https://t/${i}`, full: `https://f/${i}`, width: null, height: null }));
+
+describe('mapSerperImages', () => {
+	it('берёт поля Serper и пропускает записи без адреса картинки', () => {
+		const r = mapSerperImages({
+			images: [
+				{ title: 'Levi 501', imageUrl: 'https://a.com/1.jpg', thumbnailUrl: 'https://g.com/t1', domain: 'a.com', imageWidth: 800, imageHeight: 1000 },
+				{ title: 'нет адреса' },
+				{ imageUrl: 'javascript:alert(1)' },
+				{ imageUrl: 'https://b.com/2.jpg', source: 'B' }
+			]
+		});
+		expect(r).toHaveLength(2);
+		expect(r[0]).toMatchObject({ full: 'https://a.com/1.jpg', thumb: 'https://g.com/t1', source: 'a.com', width: 800, height: 1000 });
+		expect(r[1]).toMatchObject({ thumb: 'https://b.com/2.jpg', source: 'B', width: null });
+	});
+	it('переживает пустой и кривой ответ', () => {
+		expect(mapSerperImages(null)).toEqual([]);
+		expect(mapSerperImages({})).toEqual([]);
+	});
+});
+
+describe('parseRatings', () => {
+	it('отбрасывает мусор, дубликаты и выход за диапазон; fit ограничивает 0–10', () => {
+		const r = parseRatings(
+			{ ratings: [{ index: 0, fit: 12, person: true }, { index: 0, fit: 1, person: false }, { index: 5, fit: 5, person: false }, { index: -1 }, { index: 1, fit: 'x' }, null] },
+			3
+		);
+		expect(r).toEqual([
+			{ index: 0, fit: 10, person: true },
+			{ index: 1, fit: 5, person: false }
+		]);
+	});
+	it('не падает без ratings', () => {
+		expect(parseRatings({}, 3)).toEqual([]);
+		expect(parseRatings(null, 3)).toEqual([]);
+	});
+});
+
+describe('rankCandidates', () => {
+	it('прячет неподходящие цвет и модель и ставит вещь без человека выше', () => {
+		const items = cand(5);
+		const ratings = [
+			{ index: 0, fit: 2, person: false }, // не тот цвет
+			{ index: 1, fit: 9, person: true }, // подходит, но на модели: 6
+			{ index: 2, fit: 8, person: false }, // 8
+			{ index: 3, fit: 7, person: false }, // 7
+			{ index: 4, fit: 3, person: false } // мимо
+		];
+		expect(rankCandidates(items, ratings).map((c) => c.id)).toEqual(['2', '3', '1']);
+	});
+	it('если почти всё мимо, показывает как есть, а не пустой экран', () => {
+		const items = cand(4);
+		const ratings = items.map((_, i) => ({ index: i, fit: 1, person: false }));
+		expect(rankCandidates(items, ratings)).toHaveLength(4);
+	});
+	it('кадры без оценки остаются в выдаче', () => {
+		expect(rankCandidates(cand(3), [])).toHaveLength(3);
+	});
+	it('ограничивает количество', () => {
+		expect(rankCandidates(cand(30), [], 12)).toHaveLength(12);
+	});
+});
+
+describe('sanitizeBox', () => {
+	it('переводит 0–1000 в доли', () => {
+		expect(sanitizeBox({ found: true, x1: 100, y1: 200, x2: 600, y2: 900 })).toEqual({ x1: 0.1, y1: 0.2, x2: 0.6, y2: 0.9 });
+	});
+	it('ограничивает выход за края', () => {
+		expect(sanitizeBox({ found: true, x1: -50, y1: 0, x2: 2000, y2: 1000 })).toEqual({ x1: 0, y1: 0, x2: 1, y2: 1 });
+	});
+	it.each([
+		[{ found: false, x1: 0, y1: 0, x2: 900, y2: 900 }],
+		[{ found: true, x1: 500, y1: 0, x2: 400, y2: 900 }],
+		[{ found: true, x1: 0, y1: 0, x2: 30, y2: 900 }],
+		[{ found: true }],
+		[null]
+	])('возвращает null для %j', (raw) => {
+		expect(sanitizeBox(raw)).toBeNull();
+	});
+});

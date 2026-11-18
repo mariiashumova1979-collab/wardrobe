@@ -54,10 +54,23 @@ export type SearchResult = {
 	full: string;
 	width: number | null;
 	height: number | null;
+	/** Заполняется, если Claude проверил фото: на человеке ли вещь. */
+	person?: boolean;
+	fit?: number;
 };
 
-export const searchImages = async (q: string) =>
-	(await (await call('/api/search?q=' + encodeURIComponent(q))).json()) as { results: SearchResult[] };
+/** `about` — как человек описал вещь: по нему Claude отсеивает фото не того цвета и модели. */
+export const searchImages = async (q: string, about: string) =>
+	(await (await call(`/api/search?q=${encodeURIComponent(q)}&about=${encodeURIComponent(about)}`)).json()) as {
+		results: SearchResult[];
+		ranked: boolean;
+	};
+
+export type Box = { x1: number; y1: number; x2: number; y2: number };
+
+/** Рамка нужной вещи на фото (доли 0–1), если на кадре человек в нескольких вещах. */
+export const locateItem = async (image: string, about: string) =>
+	(await (await postJson('/api/locate', { image, about })).json()) as { box: Box | null };
 
 export const fetchImage = async (url: string) =>
 	(await call('/api/proxy?url=' + encodeURIComponent(url))).blob();

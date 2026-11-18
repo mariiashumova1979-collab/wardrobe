@@ -37,17 +37,22 @@ export async function askTool(opts: {
 	system: string;
 	text: string;
 	tool: Tool;
-	imageDataUrl?: string;
+	/** Картинки data-URL. Если их несколько, перед каждой идёт подпись «Изображение N». */
+	images?: string[];
 	maxTokens?: number;
+	timeoutMs?: number;
 }): Promise<Record<string, unknown>> {
 	const key = ANTHROPIC_API_KEY;
 	if (!key) error(500, 'ANTHROPIC_API_KEY не задан');
 
 	const content: unknown[] = [];
-	if (opts.imageDataUrl) {
-		const m = IMAGE_RE.exec(opts.imageDataUrl)!;
+	const images = opts.images ?? [];
+	images.forEach((url, i) => {
+		const m = IMAGE_RE.exec(url);
+		if (!m) return;
+		if (images.length > 1) content.push({ type: 'text', text: `Изображение ${i}:` });
 		content.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
-	}
+	});
 	content.push({ type: 'text', text: opts.text });
 
 	let res: Response;
@@ -67,7 +72,7 @@ export async function askTool(opts: {
 				tool_choice: { type: 'tool', name: opts.tool.name },
 				messages: [{ role: 'user', content }]
 			}),
-			signal: AbortSignal.timeout(25_000)
+			signal: AbortSignal.timeout(opts.timeoutMs ?? 25_000)
 		});
 	} catch {
 		error(504, 'Claude не ответил вовремя');

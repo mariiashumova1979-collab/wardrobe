@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { ApiError, fetchImage, identify, rewriteQuery, searchImages, tagImage, type SearchResult } from '../api.svelte';
-	import { blobToDataURL, cutout, shrink } from '../image';
+	import { ApiError, fetchImage, identify, locateItem, rewriteQuery, searchImages, tagImage, type SearchResult } from '../api.svelte';
+	import { blobToDataURL, crop, cutout, shrink } from '../image';
 	import { wardrobe, type Item } from '../store.svelte';
 	import { showToast } from '../toast.svelte';
 	import { hasCyrillic } from '../query';
@@ -51,7 +51,8 @@
 				busy = 'Ищу фото…';
 			}
 			searchedAs = sq;
-			results = (await searchImages(sq)).results;
+			busy = 'Ищу и отбираю фото…';
+			results = (await searchImages(sq, text)).results;
 			if (!results.length) error = 'Ничего не нашлось — попробуй описать иначе: бренд, цвет, крой.';
 			step = 'results';
 		} catch (e) {
@@ -92,7 +93,19 @@
 		try {
 			busy = 'Скачиваю фото…';
 			const source = r ? await fetchImage(r.full) : own!.blob;
-			const base = await shrink(source, 1024, { flatten: true, quality: 0.9 });
+			let base = await shrink(source, 1024, { flatten: true, quality: 0.9 });
+
+			// Вещь на человеке: сначала находим рамку нужной вещи и обрезаем кадр по ней
+			if (r?.person) {
+				busy = 'Выделяю вещь…';
+				try {
+					const { box } = await locateItem(await blobToDataURL(await shrink(base, 800, { flatten: true })), query);
+					if (box) base = await crop(base, box);
+					else showToast('Не нашла вещь на фото — оставила кадр целиком');
+				} catch {
+					showToast('Не получилось выделить вещь — оставила кадр целиком');
+				}
+			}
 
 			let final: Blob;
 			if (removeBg) {
@@ -219,6 +232,7 @@
 			{#each results as r (r.id)}
 				<button class="tile" type="button" onclick={() => choose(r)} title={r.source}>
 					<img src={r.thumb} alt={r.title} loading="lazy" referrerpolicy="no-referrer" />
+					{#if r.person}<span class="cap">на модели</span>{/if}
 				</button>
 			{/each}
 		</div>
@@ -227,6 +241,6 @@
 			<button class="btn" type="button" onclick={() => ((step = 'query'), (error = ''))}>Другой запрос</button>
 			<button class="btn ghost" type="button" onclick={onclose}>Закрыть</button>
 		</div>
-		<div class="credit">Поиск фото: Brave Search</div>
+		<div class="credit">Поиск фото: Google Images</div>
 	{/if}
 </Sheet>

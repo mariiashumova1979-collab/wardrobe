@@ -42,5 +42,5 @@ export const POST: RequestHandler = async ({ request }) => {
 		'Определи вещь на изображении и сохрани её описание.' +
 		(hint ? ` Пользователь описала вещь так: «${hint}». Учти это, если не противоречит изображению.` : '');
 
-	return json(sanitizeAttrs(await askTool({ system: SYSTEM, text, imageDataUrl: image, tool: TOOL })));
+	return json(sanitizeAttrs(await askTool({ system: SYSTEM, text, images: [image], tool: TOOL })));
 };

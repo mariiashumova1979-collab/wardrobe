@@ -14,7 +14,7 @@ describe('askTool', () => {
 		const spy = vi
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValue(reply({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'save_item', input: { name: 'Рубашка' } }] }));
-		const out = await askTool({ system: 's', text: 't', tool, imageDataUrl: 'data:image/png;base64,AAAA' });
+		const out = await askTool({ system: 's', text: 't', tool, images: ['data:image/png;base64,AAAA'] });
 		expect(out).toEqual({ name: 'Рубашка' });
 
 		const [url, init] = spy.mock.calls[0] as [string, RequestInit];
