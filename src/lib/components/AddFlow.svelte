@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { ApiError, fetchImage, identify, searchImages, tagImage, type SearchResult } from '../api.svelte';
+	import { ApiError, fetchImage, identify, rewriteQuery, searchImages, tagImage, type SearchResult } from '../api.svelte';
 	import { blobToDataURL, cutout, shrink } from '../image';
 	import { wardrobe, type Item } from '../store.svelte';
 	import { showToast } from '../toast.svelte';
+	import { hasCyrillic } from '../query';
 	import { catLabel, type Attrs } from '../taxonomy';
 	import type { Draft, TagStatus } from '../types';
 	import Sheet from './Sheet.svelte';
@@ -15,6 +16,7 @@
 
 	let step = $state<'query' | 'results' | 'edit'>('query');
 	let query = $state('');
+	let searchedAs = $state(''); // что реально ушло в поиск после перевода
 	let results = $state<SearchResult[]>([]);
 	let own = $state<{ blob: Blob; url: string } | null>(null);
 	let removeBg = $state(localStorage.getItem(BG_KEY) !== '0');
@@ -35,13 +37,21 @@
 		localStorage.setItem(BG_KEY, v ? '1' : '0');
 	}
 
-	async function search(q: string) {
+	async function search(q: string, ready = false) {
 		const text = q.trim();
 		if (!text) return;
 		error = '';
 		busy = 'Ищу фото…';
 		try {
-			results = (await searchImages(text)).results;
+			// Русское описание сначала превращаем в нормальный английский запрос
+			let sq = text;
+			if (!ready && hasCyrillic(text)) {
+				busy = 'Подбираю запрос…';
+				sq = (await rewriteQuery(text)).query;
+				busy = 'Ищу фото…';
+			}
+			searchedAs = sq;
+			results = (await searchImages(sq)).results;
 			if (!results.length) error = 'Ничего не нашлось — попробуй описать иначе: бренд, цвет, крой.';
 			step = 'results';
 		} catch (e) {
@@ -62,11 +72,12 @@
 			const big = await shrink(file, 1024, { flatten: true, quality: 0.9 });
 			if (own) URL.revokeObjectURL(own.url);
 			own = { blob: big, url: URL.createObjectURL(big) };
-			const small = await shrink(big, 640, { flatten: true });
-			const { query: q } = await identify(await blobToDataURL(small));
+			// Крупнее, чем для разметки: на бирке нужно разобрать мелкий артикул
+			const forReading = await shrink(big, 1280, { flatten: true, quality: 0.85 });
+			const { query: q } = await identify(await blobToDataURL(forReading));
 			query = q;
 			busy = '';
-			await search(q);
+			await search(q, true);
 		} catch (err) {
 			busy = '';
 			error = message(err);
@@ -190,13 +201,15 @@
 		<div class="divider">или</div>
 		<label class="btn" style="display:block" for="own">Загрузить скриншот или своё фото</label>
 		<input id="own" type="file" accept="image/*" onchange={onOwnFile} />
-		<div class="hint">Определю вещь по картинке и найду для неё аккуратное фото.</div>
+		<div class="hint">Если на бирке или скриншоте виден артикул, прочитаю его и поищу по нему. Иначе опишу вещь сама.</div>
 		<label class="check"><input type="checkbox" checked={removeBg} onchange={(e) => setRemoveBg(e.currentTarget.checked)} /> Убирать фон</label>
 		{#if error}<div class="err" role="alert">{error}</div>{/if}
 		<div class="actions"><button class="btn ghost" type="button" onclick={onclose}>Закрыть</button></div>
 	{:else}
 		<h2>Выбери фото</h2>
-		<div class="hint" style="margin:0 0 12px">«{query}»</div>
+		<div class="hint" style="margin:0 0 12px">
+			«{query}»{#if searchedAs && searchedAs !== query}<br />Искала: {searchedAs}{/if}
+		</div>
 		<div class="grid three">
 			{#if own}
 				<button class="tile" type="button" onclick={() => choose(null)}>

@@ -66,4 +66,8 @@ export const tagImage = async (image: string, hint: string) =>
 	(await (await postJson('/api/tag', { image, hint })).json()) as Partial<Attrs>;
 
 export const identify = async (image: string) =>
-	(await (await postJson('/api/identify', { image })).json()) as { query: string };
+	(await (await postJson('/api/identify', { image })).json()) as { query: string; brand: string; sku: string };
+
+/** Русское описание → хороший английский запрос для поиска картинок. */
+export const rewriteQuery = async (text: string) =>
+	(await (await postJson('/api/query', { text })).json()) as { query: string };

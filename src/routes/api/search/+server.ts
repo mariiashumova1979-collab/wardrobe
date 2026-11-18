@@ -1,5 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import { BRAVE_API_KEY } from '$app/env/private';
+import { buildSearchQuery } from '../../../lib/query';
 import type { RequestHandler } from './$types';
 
 type BraveImage = {
@@ -17,10 +18,11 @@ export const GET: RequestHandler = async ({ url }) => {
 	if (!key) error(500, 'BRAVE_API_KEY не задан');
 
 	const api = new URL('https://api.search.brave.com/res/v1/images/search');
-	// Добавка подталкивает выдачу к студийным фото на чистом фоне — их проще вырезать.
-	api.searchParams.set('q', `${q} white background product photo`);
+	api.searchParams.set('q', buildSearchQuery(q));
 	api.searchParams.set('count', '30');
 	api.searchParams.set('safesearch', 'strict');
+	// Автокоррекция портит бренды и артикулы («2753/401» → что-то другое).
+	api.searchParams.set('spellcheck', 'false');
 
 	let res: Response;
 	try {

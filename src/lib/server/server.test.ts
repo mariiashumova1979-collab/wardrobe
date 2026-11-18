@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isPrivateIp, assertPublicUrl } from './guard';
-import { extractJson } from './claude';
+import { pickToolInput } from './claude';
+import { buildSearchQuery, hasCyrillic } from '../query';
 import { sanitizeAttrs, layerOf } from '../taxonomy';
 
 describe('isPrivateIp', () => {
@@ -34,12 +35,37 @@ describe('assertPublicUrl', () => {
 	});
 });
 
-describe('extractJson', () => {
-	it('достаёт JSON из обрамления', () => {
-		expect(extractJson('Вот:\n```json\n{"a":1}\n```')).toEqual({ a: 1 });
+describe('pickToolInput', () => {
+	it('достаёт аргументы нужного инструмента', () => {
+		const data = { content: [{ type: 'text', text: 'Сейчас' }, { type: 'tool_use', name: 'save_item', input: { name: 'Рубашка' } }] };
+		expect(pickToolInput(data, 'save_item')).toEqual({ name: 'Рубашка' });
 	});
-	it('падает без JSON', () => {
-		expect(() => extractJson('нет')).toThrow();
+	it('не путает инструменты и не принимает текст вместо вызова', () => {
+		expect(pickToolInput({ content: [{ type: 'tool_use', name: 'other', input: {} }] }, 'save_item')).toBeUndefined();
+		expect(pickToolInput({ content: [{ type: 'text', text: '{"a":1}' }], stop_reason: 'max_tokens' }, 'save_item')).toBeUndefined();
+		expect(pickToolInput({}, 'save_item')).toBeUndefined();
+	});
+	it('отбрасывает input не-объект', () => {
+		expect(pickToolInput({ content: [{ type: 'tool_use', name: 'x', input: [1] }] }, 'x')).toBeUndefined();
+		expect(pickToolInput({ content: [{ type: 'tool_use', name: 'x', input: null }] }, 'x')).toBeUndefined();
+	});
+});
+
+describe('buildSearchQuery', () => {
+	it('добавляет «product photo» к обычному описанию', () => {
+		expect(buildSearchQuery('  white   oversized shirt Zara ')).toBe('white oversized shirt Zara product photo');
+	});
+	it('не трогает запрос с артикулом', () => {
+		expect(buildSearchQuery('Zara 2753/401')).toBe('Zara 2753/401');
+		expect(buildSearchQuery('Nike DH2987-100')).toBe('Nike DH2987-100');
+	});
+});
+
+describe('hasCyrillic', () => {
+	it('отличает русский текст от латиницы и артикулов', () => {
+		expect(hasCyrillic('белая рубашка')).toBe(true);
+		expect(hasCyrillic('Zara 2753/401')).toBe(false);
+		expect(hasCyrillic('Zara белая')).toBe(true);
 	});
 });
 
