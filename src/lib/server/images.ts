@@ -89,3 +89,23 @@ export function sanitizeBox(raw: unknown): Box | null {
 	if (x2 - x1 < 0.08 || y2 - y1 < 0.08) return null;
 	return { x1, y1, x2, y2 };
 }
+
+/**
+ * Объединяет выдачу нескольких запросов по очереди (по одному кадру из каждого),
+ * чтобы ни один запрос не вытеснил остальные. Одинаковые кадры схлопываются.
+ */
+export function mergeCandidates(lists: Candidate[][], limit = 20): Candidate[] {
+	const seen = new Set<string>();
+	const out: Candidate[] = [];
+	const longest = Math.max(0, ...lists.map((l) => l.length));
+	for (let i = 0; i < longest && out.length < limit; i++) {
+		for (const list of lists) {
+			const c = list[i];
+			if (!c || seen.has(c.full)) continue;
+			seen.add(c.full);
+			out.push({ ...c, id: String(out.length) });
+			if (out.length >= limit) break;
+		}
+	}
+	return out;
+}

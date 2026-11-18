@@ -16,7 +16,9 @@
 
 	let step = $state<'query' | 'results' | 'edit'>('query');
 	let query = $state('');
-	let searchedAs = $state(''); // что реально ушло в поиск после перевода
+	let searchedAs = $state(''); // что реально ушло в поиск (после перевода и со вторым запросом)
+	// Что именно ищем, с цветом и моделью: по этому тексту отбираются фото, подсказывается разметка
+	let about = $state('');
 	let results = $state<SearchResult[]>([]);
 	let own = $state<{ blob: Blob; url: string } | null>(null);
 	let removeBg = $state(localStorage.getItem(BG_KEY) !== '0');
@@ -37,7 +39,7 @@
 		localStorage.setItem(BG_KEY, v ? '1' : '0');
 	}
 
-	async function search(q: string, ready = false) {
+	async function search(q: string, opts: { ready?: boolean; alt?: string; about?: string } = {}) {
 		const text = q.trim();
 		if (!text) return;
 		error = '';
@@ -45,14 +47,15 @@
 		try {
 			// Русское описание сначала превращаем в нормальный английский запрос
 			let sq = text;
-			if (!ready && hasCyrillic(text)) {
+			if (!opts.ready && hasCyrillic(text)) {
 				busy = 'Подбираю запрос…';
 				sq = (await rewriteQuery(text)).query;
-				busy = 'Ищу фото…';
 			}
-			searchedAs = sq;
+			const alt = opts.alt?.trim() ?? '';
+			searchedAs = alt && alt !== sq ? `${sq} · ${alt}` : sq;
+			about = opts.about?.trim() || text;
 			busy = 'Ищу и отбираю фото…';
-			results = (await searchImages(sq, text)).results;
+			results = (await searchImages(sq, about, alt)).results;
 			if (!results.length) error = 'Ничего не нашлось — попробуй описать иначе: бренд, цвет, крой.';
 			step = 'results';
 		} catch (e) {
@@ -75,10 +78,11 @@
 			own = { blob: big, url: URL.createObjectURL(big) };
 			// Крупнее, чем для разметки: на бирке нужно разобрать мелкий артикул
 			const forReading = await shrink(big, 1280, { flatten: true, quality: 0.85 });
-			const { query: q } = await identify(await blobToDataURL(forReading));
-			query = q;
+			const found = await identify(await blobToDataURL(forReading));
+			query = found.query;
 			busy = '';
-			await search(q, true);
+			// ищем и по артикулу, и по описанию с цветом: Claude потом оставит то, что подходит
+			await search(found.query, { ready: true, alt: found.alt, about: found.description });
 		} catch (err) {
 			busy = '';
 			error = message(err);
@@ -99,7 +103,7 @@
 			if (r?.person) {
 				busy = 'Выделяю вещь…';
 				try {
-					const { box } = await locateItem(await blobToDataURL(await shrink(base, 800, { flatten: true })), query);
+					const { box } = await locateItem(await blobToDataURL(await shrink(base, 800, { flatten: true })), about || query);
 					if (box) base = await crop(base, box);
 					else showToast('Не нашла вещь на фото — оставила кадр целиком');
 				} catch {
@@ -140,7 +144,7 @@
 		tagStatus = 'tagging';
 		try {
 			const input = await blobToDataURL(await shrink(blob, 640, { flatten: true }));
-			apply(await tagImage(input, query));
+			apply(await tagImage(input, about || query));
 			tagStatus = 'done';
 		} catch (e) {
 			tagStatus = 'failed';

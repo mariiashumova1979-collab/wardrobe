@@ -9,3 +9,13 @@ export function buildSearchQuery(q: string): string {
 	const t = q.trim().replace(/\s+/g, ' ');
 	return /\d{4,}/.test(t) ? t : `${t} product photo`;
 }
+
+/**
+ * Магазины часто пишут артикул без служебного префикса: на бирке «PC9-36200-0287»,
+ * а на сайте «36200-0287». Убираем короткий буквенный префикс перед дефисом, остальное не трогаем.
+ */
+export function skuCore(sku: string): string {
+	const t = sku.trim();
+	const m = /^(?=[A-Z0-9]*[A-Z])[A-Z0-9]{2,4}-(?=\d)(.+)$/i.exec(t);
+	return m && m[1].length >= 6 ? m[1] : t;
+}

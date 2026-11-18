@@ -60,8 +60,8 @@ export type SearchResult = {
 };
 
 /** `about` — как человек описал вещь: по нему Claude отсеивает фото не того цвета и модели. */
-export const searchImages = async (q: string, about: string) =>
-	(await (await call(`/api/search?q=${encodeURIComponent(q)}&about=${encodeURIComponent(about)}`)).json()) as {
+export const searchImages = async (q: string, about: string, q2 = '') =>
+	(await (await call(`/api/search?q=${encodeURIComponent(q)}&about=${encodeURIComponent(about)}&q2=${encodeURIComponent(q2)}`)).json()) as {
 		results: SearchResult[];
 		ranked: boolean;
 	};
@@ -79,7 +79,14 @@ export const tagImage = async (image: string, hint: string) =>
 	(await (await postJson('/api/tag', { image, hint })).json()) as Partial<Attrs>;
 
 export const identify = async (image: string) =>
-	(await (await postJson('/api/identify', { image })).json()) as { query: string; brand: string; sku: string };
+	(await (await postJson('/api/identify', { image })).json()) as {
+		query: string;
+		/** Второй запрос (описание с цветом), когда основной идёт по артикулу. */
+		alt: string;
+		brand: string;
+		sku: string;
+		description: string;
+	};
 
 /** Русское описание → хороший английский запрос для поиска картинок. */
 export const rewriteQuery = async (text: string) =>

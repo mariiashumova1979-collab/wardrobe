@@ -195,3 +195,37 @@ describe('seenVars', () => {
 		expect(seenVars({ PATH: '/bin' })).toContain('не видит ни одной');
 	});
 });
+
+import { skuCore } from '../query';
+import { mergeCandidates } from './images';
+
+describe('skuCore', () => {
+	it.each([
+		['PC9-36200-0287', '36200-0287'],
+		['pc9-36200-0287', '36200-0287'],
+		['2753/401', '2753/401'],
+		['DH2987-100', 'DH2987-100'], // префикс длиннее 4 символов — это часть артикула
+		['501-2020', '501-2020'], // префикс без букв не трогаем
+		['AB-12', 'AB-12'], // остаток слишком короткий
+		['  A1B-12345-678 ', '12345-678']
+	])('%s → %s', (sku, core) => expect(skuCore(sku)).toBe(core));
+});
+
+describe('mergeCandidates', () => {
+	const mk = (tag: string, n: number): Candidate[] =>
+		Array.from({ length: n }, (_, i) => ({ id: String(i), title: '', source: tag, thumb: `t${tag}${i}`, full: `https://${tag}/${i}`, width: null, height: null }));
+	it('берёт кадры по очереди из обоих запросов и переписывает id', () => {
+		const out = mergeCandidates([mk('a', 3), mk('b', 3)]);
+		expect(out.map((c) => c.source)).toEqual(['a', 'b', 'a', 'b', 'a', 'b']);
+		expect(out.map((c) => c.id)).toEqual(['0', '1', '2', '3', '4', '5']);
+	});
+	it('схлопывает одинаковые кадры', () => {
+		const a = mk('x', 2);
+		expect(mergeCandidates([a, a])).toHaveLength(2);
+	});
+	it('уважает лимит и переживает пустые списки', () => {
+		expect(mergeCandidates([mk('a', 30), mk('b', 30)], 20)).toHaveLength(20);
+		expect(mergeCandidates([[], mk('b', 2)])).toHaveLength(2);
+		expect(mergeCandidates([])).toEqual([]);
+	});
+});

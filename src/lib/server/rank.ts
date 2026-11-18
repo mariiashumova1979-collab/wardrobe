@@ -2,7 +2,7 @@ import { askTool, type Tool } from './claude';
 import { assertPublicUrl } from './guard';
 import { parseRatings, rankCandidates, type Candidate } from './images';
 
-const MAX_THUMBS = 16;
+const MAX_THUMBS = 20;
 const MAX_THUMB_BYTES = 400_000;
 
 const TOOL: Tool = {
