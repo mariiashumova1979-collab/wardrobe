@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ApiError, fetchImage, identify, locateItem, rewriteQuery, searchImages, tagImage, type SearchResult } from '../api.svelte';
 	import { blobToDataURL, crop, cutout, shrink } from '../image';
-	import { wardrobe, type Item } from '../store.svelte';
+	import { wardrobe, type NewItem } from '../store.svelte';
 	import { showToast } from '../toast.svelte';
 	import { hasCyrillic } from '../query';
 	import { catLabel, type Attrs } from '../taxonomy';
@@ -170,7 +170,7 @@
 	async function save() {
 		if (!photo) return;
 		saving = true;
-		const item: Item = {
+		const item: NewItem = {
 			id: crypto.randomUUID(),
 			photo,
 			name: draft.name.trim() || catLabel(draft.category),

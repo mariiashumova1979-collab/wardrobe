@@ -28,6 +28,7 @@
 	},
 	"dependencies": {
 		"@imgly/background-removal": "^1.7.0",
+		"@vercel/blob": "^2.9.0",
 		"idb-keyval": "^6.3.0"
 	}
 }

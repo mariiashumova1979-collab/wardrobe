@@ -91,3 +91,21 @@ export const identify = async (image: string) =>
 /** Русское описание → хороший английский запрос для поиска картинок. */
 export const rewriteQuery = async (text: string) =>
 	(await (await postJson('/api/query', { text })).json()) as { query: string };
+
+export type SyncReply = { state: unknown; photos: string[] };
+
+/** Читает общее состояние (state = null) или отправляет своё и получает слитое. */
+export const syncRequest = async (state: unknown | null) => {
+	const res =
+		state === null
+			? await call('/api/sync')
+			: await call('/api/sync', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(state) });
+	return (await res.json()) as SyncReply;
+};
+
+export const uploadPhoto = async (key: string, photo: Blob) => {
+	const type = ['image/png', 'image/jpeg', 'image/webp'].includes(photo.type) ? photo.type : 'image/jpeg';
+	await call('/api/sync/photo?key=' + encodeURIComponent(key), { method: 'PUT', headers: { 'content-type': type }, body: photo });
+};
+
+export const downloadPhoto = async (key: string) => (await call('/api/sync/photo?key=' + encodeURIComponent(key))).blob();

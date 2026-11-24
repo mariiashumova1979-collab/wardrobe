@@ -1,6 +1,6 @@
 // Помогает понять, почему сервер «не видит» ключ: показывает ИМЕНА переменных (не значения),
 // которые относятся к приложению. Опечатка в имени или не та среда сразу видны.
-const OURS = /^(ACCESS_CODE|ANTHROPIC|CLAUDE|SERP|BRAVE)/i;
+const OURS = /^(ACCESS_CODE|ANTHROPIC|CLAUDE|SERP|BRAVE|BLOB|SYNC)/i;
 
 export function seenVars(env: Record<string, string | undefined> = process.env): string {
 	const names = Object.entries(env)

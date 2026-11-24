@@ -6,6 +6,8 @@
 	import Today from '../lib/components/Today.svelte';
 	import Journal from '../lib/components/Journal.svelte';
 	import Gaps from '../lib/components/Gaps.svelte';
+	import SyncSheet from '../lib/components/SyncSheet.svelte';
+	import { sync } from '../lib/sync.svelte';
 
 	const TABS = [
 		{ id: 'closet', label: 'Гардероб' },
@@ -24,9 +26,25 @@
 		window.scrollTo({ top: 0 });
 	};
 
+	let syncOpen = $state(false);
+
 	onMount(() => {
-		wardrobe.load();
-		wishlist.load();
+		Promise.all([wardrobe.load(), wishlist.load()]).then(() => sync.run());
+		// вернулась в приложение или появилась сеть: подтягиваем то, что поменялось на другом устройстве
+		const wake = () => document.visibilityState === 'visible' && sync.run();
+		document.addEventListener('visibilitychange', wake);
+		window.addEventListener('online', wake);
+		return () => {
+			document.removeEventListener('visibilitychange', wake);
+			window.removeEventListener('online', wake);
+		};
+	});
+
+	// любая правка вещей, журнала или списка желаемого запускает отправку
+	$effect(() => {
+		wardrobe.rev;
+		wishlist.rev;
+		sync.touch();
 	});
 </script>
 
@@ -39,6 +57,18 @@
 {:else}
 	<Gaps />
 {/if}
+
+<button
+	type="button"
+	class="sync-btn"
+	data-status={sync.status}
+	aria-label={sync.enabled ? 'Синхронизация: ' + ({ syncing: 'идёт', ok: 'готово', error: 'ошибка', unconfigured: 'не настроена', idle: 'включена', off: 'выключена' }[sync.status]) : 'Синхронизация выключена'}
+	onclick={() => (syncOpen = true)}
+>
+	<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-4M4 5v4h4M4 13a8 8 0 0 0 14 4M20 19v-4h-4" /></svg>
+</button>
+
+{#if syncOpen}<SyncSheet onclose={() => (syncOpen = false)} />{/if}
 
 <nav class="tabs" aria-label="Разделы">
 	{#each TABS as t (t.id)}

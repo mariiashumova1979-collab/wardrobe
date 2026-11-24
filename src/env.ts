@@ -12,5 +12,9 @@ export const variables = defineEnvVars({
 	/** Ключ Anthropic API (определение вещи и разметка). */
 	ANTHROPIC_API_KEY: { schema: optional },
 	/** Необязательно: другая модель Claude вместо модели по умолчанию. */
-	CLAUDE_MODEL: { schema: optional }
+	CLAUDE_MODEL: { schema: optional },
+	/** Токен хранилища Vercel Blob (добавляется само при подключении хранилища к проекту): синхронизация между устройствами. */
+	BLOB_READ_WRITE_TOKEN: { schema: optional },
+	/** Только для разработки: папка, в которую синхронизация пишет вместо Vercel Blob. */
+	SYNC_DIR: { schema: optional }
 });
