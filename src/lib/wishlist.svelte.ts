@@ -1,7 +1,8 @@
 import { get, set } from 'idb-keyval';
-import type { Mark, Wish } from './syncstate';
+import type { Mark, Wish as WishMeta } from './syncstate';
 
-export type { Wish };
+/** Желание со скриншотами: photos[i] — картинка для photoKeys[i]. */
+export type Wish = WishMeta & { photos: Blob[] };
 
 const KEY = 'wardrobe-wishlist-v2';
 const OLD_KEY = 'wardrobe-wishlist-v1';
@@ -23,13 +24,13 @@ class Wishlist {
 		try {
 			const s = await get<Saved>(KEY);
 			if (s) {
-				this.wishes = s.wishes;
+				this.wishes = s.wishes.map((w) => ({ ...w, photoKeys: w.photoKeys ?? [], photos: w.photos ?? [] }));
 				this.hiddenMarks = s.hidden;
 				this.goneWishes = s.goneWishes;
 			} else {
 				// список из прошлой версии: до синхронизации у желаний не было времени правки
-				const old = await get<{ wishes?: (Omit<Wish, 'updatedAt'> & { updatedAt?: number })[]; hidden?: string[] }>(OLD_KEY);
-				this.wishes = (old?.wishes ?? []).map((w) => ({ ...w, updatedAt: w.updatedAt ?? w.createdAt }));
+				const old = await get<{ wishes?: (Omit<Wish, 'updatedAt' | 'photoKeys' | 'photos'> & { updatedAt?: number })[]; hidden?: string[] }>(OLD_KEY);
+				this.wishes = (old?.wishes ?? []).map((w) => ({ ...w, updatedAt: w.updatedAt ?? w.createdAt, photoKeys: [], photos: [] }));
 				this.hiddenMarks = Object.fromEntries((old?.hidden ?? []).map((c) => [c, { on: true, at: 1 }]));
 				this.goneWishes = {};
 			}
@@ -51,12 +52,24 @@ class Wishlist {
 		this.rev++;
 	}
 
-	add(w: Omit<Wish, 'id' | 'createdAt' | 'updatedAt'>) {
-		const now = Date.now();
-		return this.#commit([{ ...w, id: crypto.randomUUID(), createdAt: now, updatedAt: now }, ...this.wishes]);
+	/** Ключ нового скриншота: старый ключ не переиспользуем, потому что картинка по ключу неизменна. */
+	#withKeys(w: Wish, prev?: Wish): Wish {
+		const keys = w.photos.map((p) => {
+			const i = prev ? prev.photos.indexOf(p) : -1;
+			return i >= 0 ? prev!.photoKeys[i] : crypto.randomUUID();
+		});
+		return { ...w, photoKeys: keys };
 	}
-	update(w: Wish) {
-		return this.#commit(this.wishes.map((x) => (x.id === w.id ? { ...w, updatedAt: Date.now() } : x)));
+	add(w: Omit<Wish, 'id' | 'createdAt' | 'updatedAt' | 'photoKeys'>) {
+		const now = Date.now();
+		const full = this.#withKeys({ ...w, id: crypto.randomUUID(), photoKeys: [], createdAt: now, updatedAt: now });
+		return this.#commit([full, ...this.wishes]);
+	}
+	update(w: Omit<Wish, 'photoKeys'> & { photoKeys?: string[] }) {
+		const prev = this.wishes.find((x) => x.id === w.id);
+		if (!prev) return Promise.resolve();
+		const next = { ...this.#withKeys({ ...w, photoKeys: [] }, prev), updatedAt: Date.now() };
+		return this.#commit(this.wishes.map((x) => (x.id === w.id ? next : x)));
 	}
 	remove(id: string) {
 		return this.#commit(

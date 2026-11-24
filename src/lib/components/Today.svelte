@@ -2,7 +2,8 @@
 	import { onMount, untrack } from 'svelte';
 	import { wardrobe, type Item } from '../store.svelte';
 	import { showToast } from '../toast.svelte';
-	import { BANDS, ROLE_GEN, ROLE_LABEL, bandOf, planOutfits, type Band, type Need, type Outfit, type Plan } from '../outfits';
+	import Collage from './Collage.svelte';
+	import { BANDS, ROLE_GEN, bandOf, planOutfits, type Band, type Need, type Outfit, type Plan } from '../outfits';
 	import { PLACE, describeCode, isRainy, loadForecast, referenceTemp, upcoming, type Forecast } from '../weather';
 	import { COLORS } from '../taxonomy';
 	import { addDays, dateKey, parseKey } from '../dates';
@@ -69,7 +70,6 @@
 		dayIdx = i;
 		manual = null;
 	}
-	const colorCss = (k: string) => COLORS.find((c) => c[0] === k)?.[2] ?? '#ccc';
 	// «Синий / голубой» → «синий»
 	const colorName = (k: string | null) => COLORS.find((c) => c[0] === k)?.[1].split('/')[0].trim().toLowerCase() ?? '';
 
@@ -166,18 +166,10 @@
 						{#if o.fresh === 'long'}<span class="tag">Есть вещь, которую давно не надевала</span>{/if}
 					</span>
 				</div>
-				<div class="parts" style="--n:{o.parts.length}">
-					{#each o.parts as p (p.role + p.item.id)}
-						<div class="part">
-							<img src={wardrobe.url(p.item)} alt={p.item.name} />
-							<span class="role">{ROLE_LABEL[p.role]}</span>
-							<span class="pn">{p.item.brand ? p.item.brand + ' ' : ''}{p.item.name}</span>
-							<span class="dots">
-								{#each p.item.colors.slice(0, 3) as c (c)}<span class="dot" style="background:{colorCss(c)}"></span>{/each}
-							</span>
-						</div>
-					{/each}
-				</div>
+				<Collage parts={o.parts} />
+				<p class="cap">
+					{#each o.parts as p, n (p.role + p.item.id)}{n ? ' · ' : ''}<span>{p.item.brand ? p.item.brand + ' ' : ''}{p.item.name}</span>{/each}
+				</p>
 				{#if isToday}
 					<button class="btn" type="button" disabled={worn.includes(i)} onclick={() => wear(o, i)}>
 						{worn.includes(i) ? 'Записано в журнал' : 'Надену это'}

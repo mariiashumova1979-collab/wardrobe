@@ -73,3 +73,42 @@ export async function cutout(blob: Blob, onProgress?: (fraction: number) => void
 		}
 	});
 }
+
+const cutouts = new WeakMap<Blob, Promise<boolean>>();
+
+/** Вырезана ли вещь из фона (прозрачные углы). Если нет, на коллаже её фон «растворяется» через multiply. */
+export function isCutout(blob: Blob): Promise<boolean> {
+	let p = cutouts.get(blob);
+	if (!p) {
+		p = (async () => {
+			try {
+				const bmp = await createImageBitmap(blob);
+				const c = document.createElement('canvas');
+				c.width = c.height = 16;
+				const ctx = c.getContext('2d', { willReadFrequently: true })!;
+				ctx.drawImage(bmp, 0, 0, 16, 16);
+				bmp.close();
+				const a = (x: number, y: number) => ctx.getImageData(x, y, 1, 1).data[3];
+				return [a(0, 0), a(15, 0), a(0, 15), a(15, 15)].every((v) => v < 250);
+			} catch {
+				return false;
+			}
+		})();
+		cutouts.set(blob, p);
+	}
+	return p;
+}
+
+const reg = typeof FinalizationRegistry === 'undefined' ? null : new FinalizationRegistry<string>((u) => URL.revokeObjectURL(u));
+const weak = new WeakMap<Blob, string>();
+
+/** Адрес картинки для <img>; освобождается, когда Blob больше никому не нужен. */
+export function urlOf(blob: Blob): string {
+	let u = weak.get(blob);
+	if (!u) {
+		u = URL.createObjectURL(blob);
+		weak.set(blob, u);
+		reg?.register(blob, u);
+	}
+	return u;
+}

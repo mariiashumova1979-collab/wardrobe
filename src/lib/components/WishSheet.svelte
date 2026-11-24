@@ -3,6 +3,9 @@
 	import { showToast } from '../toast.svelte';
 	import { CATS, COLORS, catLabel } from '../taxonomy';
 	import Sheet from './Sheet.svelte';
+	import Shots from './Shots.svelte';
+	import { shrink } from '../image';
+	import { MAX_SHOTS } from '../collage';
 
 	let {
 		wish,
@@ -25,21 +28,50 @@
 	let color = $state(wish?.color ?? preset?.color ?? '');
 	/* svelte-ignore state_referenced_locally */
 	let note = $state(wish?.note ?? '');
+	/* svelte-ignore state_referenced_locally */
+	let photos = $state.raw<Blob[]>(wish?.photos ?? []);
+	let adding = $state(false);
 	let confirmDelete = $state(false);
 	let saving = $state(false);
 
 	const colorName = (k: string) => COLORS.find((c) => c[0] === k)?.[1].split('/')[0].trim().toLowerCase() ?? '';
 	const autoTitle = $derived([colorName(color), category ? catLabel(category).split('/')[0].trim().toLowerCase() : ''].filter(Boolean).join(' '));
-	const canSave = $derived(!!category && (!!title.trim() || !!autoTitle) && !saving);
+	// образ из скриншотов может быть без категории и названия
+	const canSave = $derived((!!category || photos.length > 0) && (!!title.trim() || !!autoTitle || photos.length > 0) && !saving && !adding);
+
+	async function addShots(files: File[]) {
+		const imgs = files.filter((f) => f.type.startsWith('image/')).slice(0, MAX_SHOTS - photos.length);
+		if (!imgs.length) {
+			if (files.length) showToast(photos.length >= MAX_SHOTS ? `Не больше ${MAX_SHOTS} скриншотов` : 'Это не картинка');
+			return;
+		}
+		adding = true;
+		try {
+			// скриншот сжимается: читаемо, но не тяжело для хранилища и синхронизации
+			const done = await Promise.all(imgs.map((f) => shrink(f, 900, { type: 'image/jpeg', quality: 0.85, flatten: true })));
+			photos = [...photos, ...done];
+		} catch {
+			showToast('Не получилось открыть картинку');
+		}
+		adding = false;
+	}
+	const onpaste = (e: ClipboardEvent) => {
+		const files = [...(e.clipboardData?.files ?? [])];
+		if (files.some((f) => f.type.startsWith('image/'))) {
+			e.preventDefault();
+			addShots(files);
+		}
+	};
 
 	async function save() {
 		if (!canSave) return;
 		saving = true;
 		const data = {
-			title: title.trim() || autoTitle.replace(/^./, (c) => c.toUpperCase()),
+			title: title.trim() || autoTitle.replace(/^./, (c) => c.toUpperCase()) || 'Образ',
 			category,
 			color,
-			note: note.trim()
+			note: note.trim(),
+			photos
 		};
 		try {
 			if (wish) await wishlist.update({ ...wish, ...data });
@@ -62,10 +94,24 @@
 	}
 </script>
 
+<svelte:window {onpaste} />
+
 <Sheet {onclose} label={wish ? 'Изменить запись' : 'Что докупить'}>
 	<h2>{wish ? 'Изменить запись' : 'Что докупить'}</h2>
 
-	<label class="f" for="w-cat">Категория</label>
+	<span class="f">Скриншоты {photos.length ? `(${photos.length} из ${MAX_SHOTS})` : ''}</span>
+	{#if photos.length}
+		<div class="shots-edit"><Shots {photos} onremove={(i) => (photos = photos.filter((_, n) => n !== i))} /></div>
+	{/if}
+	{#if photos.length < MAX_SHOTS}
+		<label class="btn add-shot" class:busy={adding}>
+			{adding ? 'Обрабатываю…' : photos.length ? 'Добавить ещё' : 'Добавить скриншоты'}
+			<input type="file" accept="image/*" multiple hidden onchange={(e) => { addShots([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ''; }} />
+		</label>
+		<div class="hint" style="margin:6px 0 0">Можно вставить из буфера (Ctrl/⌘ + V). Несколько скриншотов сложатся в коллаж.</div>
+	{/if}
+
+	<label class="f" for="w-cat">Категория{photos.length ? ' (для образа можно не выбирать)' : ''}</label>
 	<select id="w-cat" class="in" bind:value={category}>
 		<option value="">Выбери категорию</option>
 		{#each CATS as [k, l] (k)}<option value={k}>{l}</option>{/each}

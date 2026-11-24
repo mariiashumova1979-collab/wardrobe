@@ -25,6 +25,8 @@ export type Wish = {
 	/** Ключ цвета из taxonomy или пустая строка, если цвет не важен. */
 	color: string;
 	note: string;
+	/** Скриншоты (до 6): каждый лежит в хранилище под своим ключом. Пусто — запись без картинок. */
+	photoKeys: string[];
 	createdAt: number;
 	updatedAt: number;
 };
@@ -72,7 +74,7 @@ export function mergeStates(a: SyncState, b: SyncState): SyncState {
 
 // ---------- проверка чужих данных (сервер получает состояние из сети) ----------
 
-const MAX = { items: 5000, marks: 200_000, wishes: 1000, hidden: 64 };
+const MAX = { items: 5000, marks: 200_000, wishes: 1000, hidden: 64, shots: 6 };
 const ID = /^[\w-]{1,64}$/;
 const PHOTO = /^[A-Za-z0-9-]{8,64}$/;
 const MARK = /^\d{4}-\d{2}-\d{2}\|[\w-]{1,64}$/;
@@ -136,13 +138,16 @@ export function parseState(raw: unknown): SyncState {
 	for (const [id, w] of entries(raw.wishes, MAX.wishes)) {
 		if (!ID.test(id) || !isObj(w)) continue;
 		const category = typeof w.category === 'string' && catKeys.has(w.category) ? w.category : '';
-		if (!category) continue;
+		const photoKeys = Array.isArray(w.photoKeys) ? [...new Set(w.photoKeys.filter((k): k is string => typeof k === 'string' && PHOTO.test(k)))].slice(0, MAX.shots) : [];
+		// образ из скриншотов может быть без категории
+		if (!category && !photoKeys.length) continue;
 		out.wishes[id] = {
 			id,
 			title: text(w.title, 80),
 			category,
 			color: typeof w.color === 'string' && colorKeys.has(w.color) ? w.color : '',
 			note: text(w.note, 160),
+			photoKeys,
 			createdAt: num(w.createdAt),
 			updatedAt: num(w.updatedAt)
 		};

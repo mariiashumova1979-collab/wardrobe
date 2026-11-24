@@ -21,7 +21,7 @@ const item = (id: string, o: Partial<ItemMeta> = {}): ItemMeta => ({
 	photoKey: 'photo-' + id + '-0000',
 	...o
 });
-const wish = (id: string, o: Partial<Wish> = {}): Wish => ({ id, title: id, category: 'shoes', color: '', note: '', createdAt: 1, updatedAt: 1, ...o });
+const wish = (id: string, o: Partial<Wish> = {}): Wish => ({ id, title: id, category: 'shoes', color: '', note: '', photoKeys: [], createdAt: 1, updatedAt: 1, ...o });
 const state = (o: Partial<SyncState> = {}): SyncState => ({ ...emptyState(), ...o });
 
 describe('слияние состояний', () => {

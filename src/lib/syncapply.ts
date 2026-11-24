@@ -4,12 +4,15 @@ import { mergeStates, type ItemMeta, type Mark, type SyncState, type Wish } from
 
 export type LocalItem<P> = ItemMeta & { photo: P };
 
+/** Желание вместе со скриншотами: photos[i] — картинка для photoKeys[i]. */
+export type LocalWish<P> = Wish & { photos: P[] };
+
 export type Local<P> = {
 	items: LocalItem<P>[];
 	log: WearLog;
 	marks: Record<string, Mark>;
 	goneItems: Record<string, number>;
-	wishes: Wish[];
+	wishes: LocalWish<P>[];
 	goneWishes: Record<string, number>;
 	hidden: Record<string, Mark>;
 };
@@ -20,13 +23,18 @@ export function itemMeta<P>(i: LocalItem<P>): ItemMeta {
 	return meta;
 }
 
+export function wishMeta<P>(w: LocalWish<P>): Wish {
+	const { photos: _photos, ...meta } = w;
+	return meta;
+}
+
 export function toState<P>(l: Local<P>): SyncState {
 	return {
 		v: 1,
 		items: Object.fromEntries(l.items.map((i) => [i.id, itemMeta(i)])),
 		goneItems: l.goneItems,
 		marks: l.marks,
-		wishes: Object.fromEntries(l.wishes.map((w) => [w.id, w])),
+		wishes: Object.fromEntries(l.wishes.map((w) => [w.id, wishMeta(w)])),
 		goneWishes: l.goneWishes,
 		hidden: l.hidden
 	};
@@ -38,13 +46,18 @@ export function photosToFetch<P>(l: Local<P>, remote: SyncState): string[] {
 	const have = new Map(l.items.map((i) => [i.id, i.photoKey]));
 	const need = new Set<string>();
 	for (const m of Object.values(merged.items)) if (have.get(m.id) !== m.photoKey) need.add(m.photoKey);
+	const haveWish = new Set(l.wishes.flatMap((w) => w.photoKeys));
+	for (const w of Object.values(merged.wishes)) for (const k of w.photoKeys) if (!haveWish.has(k)) need.add(k);
 	return [...need];
 }
 
-/** Ключи фото своих вещей, которых ещё нет в хранилище. */
-export function photosToUpload<P>(l: Local<P>, stored: string[]): LocalItem<P>[] {
+/** Фото, которых ещё нет в хранилище: вещей и скриншотов желаний. Ключ уникален, поэтому одинаковый ключ дважды не попадёт. */
+export function photosToUpload<P>(l: Local<P>, stored: string[]): { key: string; photo: P }[] {
 	const has = new Set(stored);
-	return l.items.filter((i) => !has.has(i.photoKey));
+	const out = new Map<string, P>();
+	for (const i of l.items) if (!has.has(i.photoKey)) out.set(i.photoKey, i.photo);
+	for (const w of l.wishes) w.photoKeys.forEach((k, n) => !has.has(k) && w.photos[n] !== undefined && out.set(k, w.photos[n]));
+	return [...out].map(([key, photo]) => ({ key, photo }));
 }
 
 /**
@@ -62,13 +75,25 @@ export function applyState<P>(local: Local<P>, remote: SyncState, photos: Map<st
 		else if (cur) items.push(cur);
 	}
 	items.sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
+	const wishes: LocalWish<P>[] = [];
+	const mineW = new Map(local.wishes.map((w) => [w.id, w]));
+	for (const meta of Object.values(m.wishes)) {
+		const cur = mineW.get(meta.id);
+		const have = new Map<string, P>();
+		cur?.photoKeys.forEach((k, n) => cur.photos[n] !== undefined && have.set(k, cur.photos[n]));
+		const got = meta.photoKeys.map((k) => have.get(k) ?? photos.get(k));
+		// пока скриншоты не скачаны, остаётся прежняя версия желания
+		if (got.every((p) => p !== undefined)) wishes.push({ ...meta, photos: got as P[] });
+		else if (cur) wishes.push(cur);
+	}
+	wishes.sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id));
 	const log = marksToLog(m.marks, new Set(items.map((i) => i.id)));
 	return {
 		items: reconcileWear(items, log),
 		log,
 		marks: m.marks,
 		goneItems: m.goneItems,
-		wishes: Object.values(m.wishes).sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id)),
+		wishes,
 		goneWishes: m.goneWishes,
 		hidden: m.hidden
 	};

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyState, itemMeta, photosToFetch, photosToUpload, sameLocal, toState, type Local, type LocalItem } from './syncapply';
+import { applyState, itemMeta, wishMeta, photosToFetch, photosToUpload, sameLocal, toState, type Local, type LocalItem } from './syncapply';
 import { applyDay } from './wearlog';
 import { emptyState, mergeStates, type SyncState } from './syncstate';
 
@@ -14,7 +14,7 @@ const withItems = (...items: LocalItem<string>[]): Local<string> => ({ ...empty(
 /** «Устройство»: пара «локальные данные ↔ общий сервер» с теми же шагами, что делает приложение. */
 function sync(local: Local<string>, server: SyncState, photosOnServer: Record<string, string>) {
 	const merged = mergeStates(server, toState(local));
-	for (const i of photosToUpload(local, Object.keys(photosOnServer))) photosOnServer[i.photoKey] = i.photo;
+	for (const u of photosToUpload(local, Object.keys(photosOnServer))) photosOnServer[u.key] = u.photo;
 	const fetched = new Map<string, string>();
 	for (const k of photosToFetch(local, merged)) if (photosOnServer[k]) fetched.set(k, photosOnServer[k]);
 	return { local: applyState(local, merged, fetched), server: merged };
@@ -94,9 +94,33 @@ describe('устройства обмениваются данными', () => {
 		const again = sync(a.local, a.server, photos);
 		expect(sameLocal(a.local, again.local)).toBe(true);
 	});
+	it('скриншоты желания доезжают и показываются в том же порядке', () => {
+		const photos: Record<string, string> = {};
+		const w = { id: 'w', title: 'образ', category: '', color: '', note: '', photoKeys: ['shot-1-aaaaaaaa', 'shot-2-bbbbbbbb', 'shot-3-cccccccc'], photos: ['один', 'два', 'три'], createdAt: 1, updatedAt: 1 };
+		const a = sync({ ...empty(), wishes: [w] }, emptyState(), photos);
+		expect(Object.keys(photos).sort()).toEqual(['shot-1-aaaaaaaa', 'shot-2-bbbbbbbb', 'shot-3-cccccccc']);
+		const b = sync(empty(), a.server, photos);
+		expect(b.local.wishes[0].photos).toEqual(['один', 'два', 'три']);
+	});
+	it('замена одного скриншота подтягивает только новый', () => {
+		const photos: Record<string, string> = {};
+		const w = { id: 'w', title: 'образ', category: '', color: '', note: '', photoKeys: ['shot-1-aaaaaaaa', 'shot-2-bbbbbbbb'], photos: ['один', 'два'], createdAt: 1, updatedAt: 1 };
+		const a = sync({ ...empty(), wishes: [w] }, emptyState(), photos);
+		const b = sync(empty(), a.server, photos);
+		const edited = { ...a.local.wishes[0], photoKeys: ['shot-1-aaaaaaaa', 'shot-9-zzzzzzzz'], photos: ['один', 'девять'], updatedAt: 7 };
+		const a2 = sync({ ...a.local, wishes: [edited] }, b.server, photos);
+		expect(photosToFetch(b.local, a2.server)).toEqual(['shot-9-zzzzzzzz']);
+		expect(sync(b.local, a2.server, photos).local.wishes[0].photos).toEqual(['один', 'девять']);
+	});
+	it('желание, чей скриншот ещё не скачан, остаётся прежним', () => {
+		const old = { id: 'w', title: 'старое', category: '', color: '', note: '', photoKeys: ['shot-1-aaaaaaaa'], photos: ['один'], createdAt: 1, updatedAt: 1 };
+		const remote: SyncState = { ...emptyState(), wishes: { w: { ...wishMeta(old), title: 'новое', photoKeys: ['shot-2-bbbbbbbb'], updatedAt: 5 } } };
+		expect(applyState({ ...empty(), wishes: [old] }, remote, new Map()).wishes[0].title).toBe('старое');
+		expect(applyState({ ...empty(), wishes: [old] }, remote, new Map([['shot-2-bbbbbbbb', 'два']])).wishes[0]).toMatchObject({ title: 'новое', photos: ['два'] });
+	});
 	it('список желаемого и скрытые категории переезжают', () => {
 		const photos: Record<string, string> = {};
-		const a = sync({ ...empty(), wishes: [{ id: 'w', title: 'туфли', category: 'shoes', color: '', note: '', createdAt: 1, updatedAt: 1 }], hidden: { bag: { on: true, at: 5 } } }, emptyState(), photos);
+		const a = sync({ ...empty(), wishes: [{ id: 'w', title: 'туфли', category: 'shoes', color: '', note: '', photoKeys: [], photos: [], createdAt: 1, updatedAt: 1 }], hidden: { bag: { on: true, at: 5 } } }, emptyState(), photos);
 		const b = sync(empty(), a.server, photos);
 		expect(b.local.wishes.map((w) => w.title)).toEqual(['туфли']);
 		expect(b.local.hidden.bag.on).toBe(true);

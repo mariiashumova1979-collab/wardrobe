@@ -7,9 +7,10 @@
 	import { showToast } from '../toast.svelte';
 	import AddFlow from './AddFlow.svelte';
 	import WishSheet from './WishSheet.svelte';
+	import Shots from './Shots.svelte';
 
 	const report = $derived(wardrobe.loaded ? analyzeGaps(wardrobe.items, wishlist.hidden) : null);
-	const gains = $derived(new Map(wishlist.wishes.map((w) => [w.id, wishGain(wardrobe.items, w)])));
+	const gains = $derived(new Map(wishlist.wishes.map((w) => [w.id, w.category ? wishGain(wardrobe.items, w) : null])));
 	const colorCss = (k: string) => COLORS.find((c) => c[0] === k)?.[2] ?? '#ccc';
 	const colorName = (k: string) => COLORS.find((c) => c[0] === k)?.[1].split('/')[0].trim().toLowerCase() ?? '';
 	const LEVEL = { none: 'Нечего надеть', few: 'Мало', ok: 'Хватает' } as const;
@@ -80,12 +81,16 @@
 		<div class="buy">
 			{#each wishlist.wishes as w (w.id)}
 				<button class="by wish" type="button" onclick={() => (sheet = { wish: w })}>
-					<span class="sw" style="background:{w.color ? colorCss(w.color) : 'transparent'}" data-any={!w.color}></span>
+					{#if w.photos.length}
+						<span class="wthumb"><Shots photos={w.photos} small /></span>
+					{:else}
+						<span class="sw" style="background:{w.color ? colorCss(w.color) : 'transparent'}" data-any={!w.color}></span>
+					{/if}
 					<div>
 						<b>{w.title}</b>
-						<span class="mute">{catLabel(w.category)}{w.color ? ' · ' + colorName(w.color) : ''}</span>
+						{#if w.category}<span class="mute">{catLabel(w.category)}{w.color ? ' · ' + colorName(w.color) : ''}</span>{/if}
 						{#if w.note}<span>{w.note}</span>{/if}
-						<span class="gain">{gainText(gains.get(w.id))}</span>
+						{#if w.category}<span class="gain">{gainText(gains.get(w.id))}</span>{/if}
 					</div>
 				</button>
 			{/each}
@@ -125,7 +130,7 @@
 									class="chip"
 									type="button"
 									disabled={inList(b.category, b.color)}
-									onclick={() => guard(() => wishlist.add({ title: b.title, category: b.category, color: b.color, note: '' }).then(() => showToast('Добавила в мой список')))}
+									onclick={() => guard(() => wishlist.add({ title: b.title, category: b.category, color: b.color, note: '', photos: [] }).then(() => showToast('Добавила в мой список')))}
 								>
 									{inList(b.category, b.color) ? 'В списке' : 'В мой список'}
 								</button>

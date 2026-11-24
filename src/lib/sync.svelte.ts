@@ -106,11 +106,11 @@ class Sync {
 		let done = 0;
 		await pool(up, async (i) => {
 			this.progress = `Загружаю фото: ${++done} из ${up.length}`;
-			await uploadPhoto(i.photoKey, i.photo);
+			await uploadPhoto(i.key, i.photo);
 		});
 
 		// 3. скачиваем фото вещей, которых нет на этом устройстве. Если фото ещё нет на сервере (другое устройство не успело) — вещь придёт в следующий раз
-		const need = photosToFetch(snapshot(), remote).filter((k) => reply.photos.includes(k) || up.some((i) => i.photoKey === k));
+		const need = photosToFetch(snapshot(), remote).filter((k) => reply.photos.includes(k) || up.some((i) => i.key === k));
 		const photos = new Map<string, Blob>();
 		done = 0;
 		await pool(need, async (key) => {
