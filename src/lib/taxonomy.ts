@@ -2,6 +2,8 @@
 
 export type Attrs = {
 	name: string;
+	/** Бренд; у вещей, добавленных раньше, пустая строка. */
+	brand: string;
 	category: string;
 	colors: string[];
 	material: string;
@@ -89,6 +91,7 @@ export function sanitizeAttrs(raw: unknown): Partial<Attrs> {
 			: undefined;
 	const out: Partial<Attrs> = {};
 	if (typeof r.name === 'string') out.name = r.name.trim().slice(0, 60);
+	if (typeof r.brand === 'string') out.brand = r.brand.trim().slice(0, 40);
 	if (typeof r.category === 'string' && keys(CATS).has(r.category)) out.category = r.category;
 	const colors = list(r.colors, keys(COLORS), 3);
 	if (colors) out.colors = colors;

@@ -50,7 +50,7 @@
 		{:else if tagStatus === 'done'}
 			<b>Готово</b>Проверь, всё ли верно, и поправь, если нет.
 		{:else}
-			<b>{draft.name || catLabel(draft.category)}</b>
+			<b>{draft.brand ? draft.brand + ' · ' : ''}{draft.name || catLabel(draft.category)}</b>
 			{draft.wearCount ? 'Надето ' + pluralRu(draft.wearCount, ['раз', 'раза', 'раз']) : 'Ещё не надевала'}
 		{/if}
 	</div>
@@ -58,6 +58,9 @@
 
 <label class="f" for="f-name">Название</label>
 <input id="f-name" class="in" type="text" maxlength="60" placeholder="Например: белая рубашка оверсайз" bind:value={draft.name} />
+
+<label class="f" for="f-brand">Бренд</label>
+<input id="f-brand" class="in" type="text" maxlength="40" placeholder="Например: Zara, Levi's" autocomplete="off" bind:value={draft.brand} />
 
 <label class="f" for="f-cat">Категория</label>
 <select id="f-cat" class="in" bind:value={draft.category}>

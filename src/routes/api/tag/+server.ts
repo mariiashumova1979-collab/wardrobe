@@ -11,7 +11,12 @@ const TOOL: Tool = {
 	schema: {
 		type: 'object',
 		properties: {
-			name: { type: 'string', description: 'Короткое название по-русски, 2–4 слова, без цвета' },
+			name: { type: 'string', description: 'Короткое название по-русски, 2–4 слова, без цвета и без бренда' },
+			brand: {
+				type: 'string',
+				description:
+					'Бренд, если он виден на фото (логотип, бирка) или назван в описании пользователя. Только название, например «Zara». Не угадывай: нет уверенности — пустая строка.'
+			},
 			category: {
 				type: 'string',
 				enum: CATS.map((c) => c[0]),
@@ -28,7 +33,7 @@ const TOOL: Tool = {
 			seasons: { type: 'array', items: { type: 'string', enum: SEASONS.map((c) => c[0]) } },
 			formality: { type: 'string', enum: FORMAL.map((c) => c[0]) }
 		},
-		required: ['name', 'category', 'colors', 'seasons', 'formality']
+		required: ['name', 'brand', 'category', 'colors', 'seasons', 'formality']
 	}
 };
 

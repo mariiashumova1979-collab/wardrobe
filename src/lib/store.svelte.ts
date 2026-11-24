@@ -20,8 +20,9 @@ class Wardrobe {
 	#urls = new Map<string, string>();
 
 	async load() {
+		if (this.loaded) return;
 		try {
-			this.items = (await get<Item[]>(KEY)) ?? [];
+			this.items = ((await get<Item[]>(KEY)) ?? []).map((i) => ({ ...i, brand: i.brand ?? '' }));
 			// просим браузер не вычищать данные при нехватке места
 			await navigator.storage?.persist?.();
 		} catch {

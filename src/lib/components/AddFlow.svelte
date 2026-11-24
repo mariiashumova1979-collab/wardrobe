@@ -12,13 +12,15 @@
 	let { onclose }: { onclose: () => void } = $props();
 
 	const BG_KEY = 'wardrobe-removebg';
-	const blank = (): Draft => ({ name: '', category: '', colors: [], material: '', seasons: [], formality: '', wearCount: 0 });
+	const blank = (): Draft => ({ name: '', brand: '', category: '', colors: [], material: '', seasons: [], formality: '', wearCount: 0 });
 
 	let step = $state<'query' | 'results' | 'edit'>('query');
 	let query = $state('');
 	let searchedAs = $state(''); // что реально ушло в поиск (после перевода и со вторым запросом)
 	// Что именно ищем, с цветом и моделью: по этому тексту отбираются фото, подсказывается разметка
 	let about = $state('');
+	// Бренд, прочитанный с бирки или скриншота: надёжнее, чем догадка по картинке
+	let foundBrand = $state('');
 	let results = $state<SearchResult[]>([]);
 	let own = $state<{ blob: Blob; url: string } | null>(null);
 	let removeBg = $state(localStorage.getItem(BG_KEY) !== '0');
@@ -39,10 +41,11 @@
 		localStorage.setItem(BG_KEY, v ? '1' : '0');
 	}
 
-	async function search(q: string, opts: { ready?: boolean; alt?: string; about?: string } = {}) {
+	async function search(q: string, opts: { ready?: boolean; alt?: string; about?: string; brand?: string } = {}) {
 		const text = q.trim();
 		if (!text) return;
 		error = '';
+		foundBrand = opts.brand?.trim() ?? '';
 		busy = 'Ищу фото…';
 		try {
 			// Русское описание сначала превращаем в нормальный английский запрос
@@ -82,7 +85,7 @@
 			query = found.query;
 			busy = '';
 			// ищем и по артикулу, и по описанию с цветом: Claude потом оставит то, что подходит
-			await search(found.query, { ready: true, alt: found.alt, about: found.description });
+			await search(found.query, { ready: true, alt: found.alt, about: found.description, brand: found.brand });
 		} catch (err) {
 			busy = '';
 			error = message(err);
@@ -129,7 +132,7 @@
 			photo = final;
 			if (photoUrl) URL.revokeObjectURL(photoUrl);
 			photoUrl = URL.createObjectURL(final);
-			draft = blank();
+			draft = { ...blank(), brand: foundBrand };
 			step = 'edit';
 			busy = '';
 			tag(final);
@@ -155,6 +158,7 @@
 	// Подставляем только в пустые поля: если человек уже что-то ввёл, не затираем.
 	function apply(t: Partial<Attrs>) {
 		if (!draft.name && t.name) draft.name = t.name;
+		if (!draft.brand && t.brand) draft.brand = t.brand;
 		if (!draft.category && t.category) draft.category = t.category;
 		if (!draft.colors.length && t.colors) draft.colors = t.colors;
 		if (!draft.material && t.material) draft.material = t.material;
@@ -169,6 +173,7 @@
 			id: crypto.randomUUID(),
 			photo,
 			name: draft.name.trim() || catLabel(draft.category),
+			brand: draft.brand.trim(),
 			category: draft.category,
 			colors: [...draft.colors],
 			material: draft.material.trim(),
