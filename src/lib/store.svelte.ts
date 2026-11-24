@@ -1,5 +1,6 @@
-import { get, set } from 'idb-keyval';
+import { get, setMany } from 'idb-keyval';
 import type { Attrs } from './taxonomy';
+import { applyDay, dropFromLog, type WearLog } from './wearlog';
 
 export type Item = Attrs & {
 	id: string;
@@ -12,9 +13,12 @@ export type Item = Attrs & {
 };
 
 const KEY = 'wardrobe-items-v1';
+const LOG_KEY = 'wardrobe-wear-v1';
 
 class Wardrobe {
 	items = $state.raw<Item[]>([]);
+	/** Журнал носки: «ГГГГ-ММ-ДД» → id надетых вещей. */
+	log = $state.raw<WearLog>({});
 	loaded = $state(false);
 	error = $state('');
 	#urls = new Map<string, string>();
@@ -22,7 +26,9 @@ class Wardrobe {
 	async load() {
 		if (this.loaded) return;
 		try {
-			this.items = ((await get<Item[]>(KEY)) ?? []).map((i) => ({ ...i, brand: i.brand ?? '' }));
+			const [items, log] = await Promise.all([get<Item[]>(KEY), get<WearLog>(LOG_KEY)]);
+			this.items = (items ?? []).map((i) => ({ ...i, brand: i.brand ?? '' }));
+			this.log = log ?? {};
 			// просим браузер не вычищать данные при нехватке места
 			await navigator.storage?.persist?.();
 		} catch {
@@ -46,9 +52,14 @@ class Wardrobe {
 		this.#urls.delete(id);
 	}
 
-	async #commit(next: Item[]) {
-		await set(KEY, next);
+	// Вещи и журнал пишутся одной транзакцией: счётчики носки не разойдутся с датами
+	async #commit(next: Item[], log: WearLog = this.log) {
+		await setMany([
+			[KEY, next],
+			[LOG_KEY, log]
+		]);
 		this.items = next;
+		this.log = log;
 	}
 
 	add(item: Item) {
@@ -63,7 +74,21 @@ class Wardrobe {
 
 	remove(id: string) {
 		this.#forget(id);
-		return this.#commit(this.items.filter((i) => i.id !== id));
+		return this.#commit(
+			this.items.filter((i) => i.id !== id),
+			dropFromLog(this.log, id)
+		);
+	}
+
+	/** Записывает, что в этот день надето ровно это. */
+	setDay(date: string, ids: string[]) {
+		const r = applyDay(this.items, this.log, date, ids);
+		return this.#commit(r.items, r.log);
+	}
+
+	/** Добавляет вещи к тому, что уже отмечено в этот день. */
+	logWear(date: string, ids: string[]) {
+		return this.setDay(date, [...(this.log[date] ?? []), ...ids]);
 	}
 }
 

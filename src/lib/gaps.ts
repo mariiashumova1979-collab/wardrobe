@@ -67,7 +67,8 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 const cnt = (items: Piece[], r: Role) => items.filter((i) => roleOf(i.category) === r).length;
 const lower = (l: string) => l.toLowerCase();
 
-export function analyzeGaps<T extends Piece>(all: T[]): GapReport<T> {
+/** `hidden` — категории, которые она попросила не предлагать. */
+export function analyzeGaps<T extends Piece>(all: T[], hidden: readonly string[] = []): GapReport<T> {
 	const core = all.filter((i) => roleOf(i.category));
 	const counts: Record<Role, number> = {
 		top: cnt(core, 'top'),
@@ -111,12 +112,13 @@ export function analyzeGaps<T extends Piece>(all: T[]): GapReport<T> {
 		}
 	}
 
-	return { tooFew: false, counts, bands, orphans, buy: suggestBuys(core, bands, orphans) };
+	return { tooFew: false, counts, bands, orphans, buy: suggestBuys(core, bands, orphans, new Set(hidden)) };
 }
 
-function suggestBuys<T extends Piece>(core: T[], bands: BandReport[], orphans: Orphan<T>[]): Buy[] {
+function suggestBuys<T extends Piece>(core: T[], bands: BandReport[], orphans: Orphan<T>[], hidden: Set<string>): Buy[] {
 	const scored: (Buy & { piece: Piece; raw: number })[] = [];
 	for (const c of CANDIDATES) {
+		if (hidden.has(c.cat)) continue;
 		for (const [color, forms] of NEUTRALS) {
 			const piece: Piece = { id: '__new', category: c.cat, colors: [color], seasons: [], formality: c.formality, lastWorn: null };
 			const next = [...core, piece as T];
@@ -168,4 +170,34 @@ function suggestBuys<T extends Piece>(core: T[], bands: BandReport[], orphans: O
 		if (!parts.length) parts.push(`Даст ещё ${pluralRu(raw, ['образ', 'образа', 'образов'])} на разную погоду.`);
 		return { ...b, why: parts.join(' ') };
 	});
+}
+
+const FORMALITY: Record<string, string> = {
+	...Object.fromEntries(CANDIDATES.map((c) => [c.cat, c.formality])),
+	hoodie: 'casual',
+	dress: 'smart',
+	shorts: 'casual'
+};
+
+/**
+ * Сколько новых образов даст вещь, которую она хочет купить (сумма по четырём периодам погоды).
+ * null — вещь в образы не входит (сумка, рюкзак, аксессуар).
+ */
+export function wishGain<T extends Piece>(all: T[], w: { category: string; color: string }): number | null {
+	if (!roleOf(w.category)) return null;
+	const core = all.filter((i) => roleOf(i.category));
+	const piece: Piece = {
+		id: '__wish',
+		category: w.category,
+		colors: w.color ? [w.color] : [],
+		seasons: [],
+		formality: FORMALITY[w.category] ?? 'casual',
+		lastWorn: null
+	};
+	const next = [...core, piece as T];
+	let gain = 0;
+	for (const b of BANDS) {
+		gain += Math.min(countLooks(next, b.id, ENOUGH), ENOUGH) - Math.min(countLooks(core, b.id, ENOUGH), ENOUGH);
+	}
+	return gain;
 }

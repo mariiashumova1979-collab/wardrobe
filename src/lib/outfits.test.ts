@@ -255,3 +255,40 @@ describe('покупки закрывают отсутствующий слой'
 		expect(r.buy.length).toBeLessThanOrEqual(5);
 	});
 });
+
+describe('редактируемые дыры', () => {
+	const base = () => [
+		piece('top', ['white']),
+		piece('top', ['black']),
+		piece('jeans', ['blue']),
+		piece('pants', ['black']),
+		piece('shoes', ['white'])
+	];
+	it('скрытая категория больше не предлагается, на её место встаёт другая', async () => {
+		const { analyzeGaps } = await import('./gaps');
+		const first = analyzeGaps(base()).buy.map((b) => b.category);
+		expect(first.length).toBeGreaterThan(0);
+		const hide = first[0];
+		const after = analyzeGaps(base(), [hide]).buy.map((b) => b.category);
+		expect(after).not.toContain(hide);
+	});
+	it('скрытый недостающий слой тоже не возвращается', async () => {
+		const { analyzeGaps } = await import('./gaps');
+		const r = analyzeGaps(base(), ['outer']);
+		expect(r.bands.find((b) => b.band === 'cool')!.missing).toContain('outer'); // дыра остаётся видна
+		expect(r.buy.some((b) => b.category === 'outer')).toBe(false); // но не предлагается
+	});
+	it('прирост от желаемой вещи: нужная вещь даёт образы, ненужная ничего, сумка не считается', async () => {
+		const { wishGain } = await import('./gaps');
+		const items = base();
+		const sweater = wishGain(items, { category: 'sweater', color: 'beige' })!;
+		expect(sweater).toBeGreaterThan(0); // второй слой нужен в прохладу и холод
+		expect(wishGain(items, { category: 'backpack', color: 'black' })).toBeNull();
+		const flood = [...items, ...Array.from({ length: 8 }, (_, i) => piece('top', ['white'], { id: 'x' + i }))];
+		expect(wishGain(flood, { category: 'top', color: 'white' })!).toBeLessThanOrEqual(wishGain(items, { category: 'top', color: 'white' })!);
+	});
+	it('цвет «любой» считается как нейтральный', async () => {
+		const { wishGain } = await import('./gaps');
+		expect(wishGain(base(), { category: 'sweater', color: '' })!).toBeGreaterThan(0);
+	});
+});

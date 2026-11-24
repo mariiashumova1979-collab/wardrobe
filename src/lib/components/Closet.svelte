@@ -3,6 +3,7 @@
 	import { showToast } from '../toast.svelte';
 	import { CATS, COLORS, catLabel, layerOf, pluralRu } from '../taxonomy';
 	import type { Draft } from '../types';
+	import { dateKey } from '../dates';
 	import AddFlow from './AddFlow.svelte';
 	import ItemForm from './ItemForm.svelte';
 	import Sheet from './Sheet.svelte';
@@ -77,12 +78,19 @@
 	}
 	async function wear() {
 		if (!editing || !draft) return;
+		const today = dateKey();
+		if (wardrobe.log[today]?.includes(editing.id)) {
+			showToast('Уже отмечено на сегодня');
+			return;
+		}
 		try {
-			const next = { ...merged(editing, draft), wearCount: editing.wearCount + 1, lastWorn: Date.now() };
-			await wardrobe.update(next);
+			// сначала сохраняем правки из формы, потом отмечаем носку: журнал меняет счётчики в хранилище
+			await wardrobe.update(merged(editing, draft));
+			await wardrobe.logWear(today, [editing.id]);
+			const next = wardrobe.items.find((i) => i.id === editing!.id)!;
 			editing = next;
 			draft.wearCount = next.wearCount;
-			showToast('Отмечено: надела сегодня');
+			showToast('Записала в журнал на сегодня');
 		} catch {
 			showToast('Не удалось сохранить');
 		}

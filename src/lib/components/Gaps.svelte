@@ -1,17 +1,41 @@
 <script lang="ts">
 	import { wardrobe } from '../store.svelte';
-	import { ENOUGH, analyzeGaps, type BandReport } from '../gaps';
+	import { wishlist, type Wish } from '../wishlist.svelte';
+	import { ENOUGH, analyzeGaps, wishGain, type BandReport } from '../gaps';
 	import { ROLE_GEN, ROLE_LABEL, ROLE_ORDER } from '../outfits';
-	import { COLORS, pluralRu } from '../taxonomy';
+	import { COLORS, catLabel, pluralRu } from '../taxonomy';
+	import { showToast } from '../toast.svelte';
+	import AddFlow from './AddFlow.svelte';
+	import WishSheet from './WishSheet.svelte';
 
-	const report = $derived(wardrobe.loaded ? analyzeGaps(wardrobe.items) : null);
+	const report = $derived(wardrobe.loaded ? analyzeGaps(wardrobe.items, wishlist.hidden) : null);
+	const gains = $derived(new Map(wishlist.wishes.map((w) => [w.id, wishGain(wardrobe.items, w)])));
 	const colorCss = (k: string) => COLORS.find((c) => c[0] === k)?.[2] ?? '#ccc';
+	const colorName = (k: string) => COLORS.find((c) => c[0] === k)?.[1].split('/')[0].trim().toLowerCase() ?? '';
 	const LEVEL = { none: 'Нечего надеть', few: 'Мало', ok: 'Хватает' } as const;
+	const allOk = $derived(!!report && !report.tooFew && report.bands.every((b) => b.level === 'ok'));
+
+	let sheet = $state<{ wish: Wish | null; preset?: { title: string; category: string; color: string } } | null>(null);
+	let buying = $state<Wish | null>(null);
+
 	function detail(b: BandReport) {
 		const n = b.looks >= ENOUGH ? `${ENOUGH}+ образов` : b.looks ? pluralRu(b.looks, ['образ', 'образа', 'образов']) : 'Образов нет';
 		return b.missing.length ? `${n} · не хватает: ${b.missing.map((r) => ROLE_GEN[r]).join(', ')}` : n;
 	}
-	const allOk = $derived(!!report && !report.tooFew && report.bands.every((b) => b.level === 'ok'));
+	function gainText(g: number | null | undefined) {
+		if (g == null) return 'В образы не входит, на подбор не влияет.';
+		if (g <= 0) return 'Новых образов не добавит: похожего у тебя уже хватает.';
+		return `Даст ещё ${pluralRu(g, ['образ', 'образа', 'образов'])} на разную погоду.`;
+	}
+	const inList = (category: string, color: string) => wishlist.wishes.some((w) => w.category === category && w.color === color);
+
+	async function guard(fn: () => Promise<unknown>) {
+		try {
+			await fn();
+		} catch {
+			showToast('Не удалось сохранить');
+		}
+	}
 </script>
 
 <header>
@@ -23,7 +47,7 @@
 	{#if !report}
 		<div class="empty"><p>Загружаю…</p></div>
 	{:else if report.tooFew}
-		<div class="empty">
+		<div class="empty" style="padding:28px 24px">
 			<h2>Пока рано считать</h2>
 			<p>Добавь хотя бы три вещи, например верх, низ и обувь, и я покажу, чего не хватает.</p>
 		</div>
@@ -46,7 +70,33 @@
 		<div class="hint counts">
 			{ROLE_ORDER.map((r) => `${ROLE_LABEL[r]} ${report.counts[r]}`).join(' · ')}
 		</div>
+	{/if}
 
+	<div class="sec-row">
+		<h3 class="sec">Мой список</h3>
+		<button class="btn small" type="button" onclick={() => (sheet = { wish: null })}>+ Добавить</button>
+	</div>
+	{#if wishlist.wishes.length}
+		<div class="buy">
+			{#each wishlist.wishes as w (w.id)}
+				<button class="by wish" type="button" onclick={() => (sheet = { wish: w })}>
+					<span class="sw" style="background:{w.color ? colorCss(w.color) : 'transparent'}" data-any={!w.color}></span>
+					<div>
+						<b>{w.title}</b>
+						<span class="mute">{catLabel(w.category)}{w.color ? ' · ' + colorName(w.color) : ''}</span>
+						{#if w.note}<span>{w.note}</span>{/if}
+						<span class="gain">{gainText(gains.get(w.id))}</span>
+					</div>
+				</button>
+			{/each}
+		</div>
+	{:else}
+		<p class="hint" style="margin-top:0">
+			Добавь то, что считаешь нужным: покажу, сколько образов это даст с тем, что уже есть.
+		</p>
+	{/if}
+
+	{#if report && !report.tooFew}
 		{#if report.orphans.length}
 			<h3 class="sec">Вещи без пары</h3>
 			<p class="hint" style="margin-top:0">С ними пока не из чего собрать образ.</p>
@@ -60,7 +110,7 @@
 			</div>
 		{/if}
 
-		<h3 class="sec">Что докупить в первую очередь</h3>
+		<h3 class="sec">Что я советую докупить</h3>
 		{#if report.buy.length}
 			<div class="buy">
 				{#each report.buy as b (b.category)}
@@ -70,6 +120,17 @@
 							<b>{b.title}</b>
 							<span class="mute">{b.examples}</span>
 							<span>{b.why}</span>
+							<span class="acts">
+								<button
+									class="chip"
+									type="button"
+									disabled={inList(b.category, b.color)}
+									onclick={() => guard(() => wishlist.add({ title: b.title, category: b.category, color: b.color, note: '' }).then(() => showToast('Добавила в мой список')))}
+								>
+									{inList(b.category, b.color) ? 'В списке' : 'В мой список'}
+								</button>
+								<button class="chip" type="button" onclick={() => guard(() => wishlist.hide(b.category))}>Не нужно</button>
+							</span>
 						</div>
 					</div>
 				{/each}
@@ -80,5 +141,31 @@
 		{:else}
 			<p class="hint" style="margin-top:0">Одна новая вещь заметно ничего не изменит. Лучше добавь в гардероб то, что уже есть.</p>
 		{/if}
+
+		{#if wishlist.hidden.length}
+			<p class="hint" style="margin-bottom:6px">Не предлагаю:</p>
+			<div class="chips" style="margin:0">
+				{#each wishlist.hidden as c (c)}
+					<button class="chip" type="button" onclick={() => guard(() => wishlist.unhide(c))}>Вернуть: {catLabel(c).split('/')[0].trim().toLowerCase()}</button>
+				{/each}
+			</div>
+		{/if}
 	{/if}
 </main>
+
+{#if sheet}
+	<WishSheet
+		wish={sheet.wish}
+		preset={sheet.preset}
+		onclose={() => (sheet = null)}
+		onbought={(w) => {
+			sheet = null;
+			buying = w;
+		}}
+	/>
+{/if}
+
+{#if buying}
+	{@const w = buying}
+	<AddFlow initialQuery={w.title} onclose={() => (buying = null)} onsaved={() => guard(() => wishlist.remove(w.id))} />
+{/if}

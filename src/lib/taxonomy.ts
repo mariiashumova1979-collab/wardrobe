@@ -27,6 +27,7 @@ export const CATS: [string, string][] = [
 	['shorts', 'Шорты'],
 	['shoes', 'Обувь'],
 	['bag', 'Сумка'],
+	['backpack', 'Рюкзак'],
 	['acc', 'Аксессуар']
 ];
 

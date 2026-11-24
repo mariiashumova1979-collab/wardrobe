@@ -9,13 +9,14 @@
 	import Sheet from './Sheet.svelte';
 	import ItemForm from './ItemForm.svelte';
 
-	let { onclose }: { onclose: () => void } = $props();
+	let { onclose, initialQuery = '', onsaved }: { onclose: () => void; initialQuery?: string; onsaved?: () => void } = $props();
 
 	const BG_KEY = 'wardrobe-removebg';
 	const blank = (): Draft => ({ name: '', brand: '', category: '', colors: [], material: '', seasons: [], formality: '', wearCount: 0 });
 
 	let step = $state<'query' | 'results' | 'edit'>('query');
-	let query = $state('');
+	// svelte-ignore state_referenced_locally
+	let query = $state(initialQuery);
 	let searchedAs = $state(''); // что реально ушло в поиск (после перевода и со вторым запросом)
 	// Что именно ищем, с цветом и моделью: по этому тексту отбираются фото, подсказывается разметка
 	let about = $state('');
@@ -187,6 +188,7 @@
 		try {
 			await wardrobe.add(item);
 			showToast('Добавлено в гардероб');
+			onsaved?.();
 			onclose();
 		} catch {
 			saving = false;
